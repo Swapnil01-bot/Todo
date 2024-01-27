@@ -44,5 +44,5 @@ User.init({
         allowNull:true
     }
 },{tableName:"user",modelName:"User",sequelize:sequelizeCon});
-
+// User.sync();
 module.exports = {User}
