@@ -10,4 +10,13 @@ async function register(req,res) {
     }
     return res.send({data:data.data})
 }
-module.exports = {register}
+async function login(req,res) {
+    let data = await auth.login(req.body).catch((error)=>{return{error}})
+    if (!data || (data && data.error)) {
+        let error = (data && data.error) ? data.error : "internal server error";
+        let status = (data && data.status) ? data.status:500; 
+        return res.status(status).send({error})
+    }
+    return res.header("token",data.token).send({status:"success"})
+}
+module.exports = {register,login}
