@@ -2,6 +2,8 @@ let {User} = require("../schema/user");
 let joi = require("joi");
 let bcrypt = require("bcrypt");
 let security = require("../helper/security")
+let {sendMail} = require("../helper/mailer")
+let otpGenerator = require('otp-generator')
 
 async function register(params) {
     //user data validation
@@ -62,7 +64,6 @@ async function login(params) {
     }
     // Check if email exist in DB
     let user = await User.findOne({where:{emailID:params.email}}).catch((error)=>{return{error}})
-    // console.log("user",user);
     if (!user || (user && user.error)) {
         return {error:"User Not Found",status:404}
     }
@@ -100,8 +101,58 @@ async function validateLogin(params) {
     }
     return{data:valid}
 }
+async function forgetPassword(params) {
+    // User data validation
+    let check = await validateForgetPassword(params).catch((error)=>{return {error}})
+    if (!check || (check && check.error)) {
+        return {error:check.error,status:400};
+    }
+    // Check if email exist
+    let user = await User.findOne({where:{emailID:params.email}}).catch((error)=>{return{error}})
+    if (!user || (user && user.error)) {
+        return {error:"User Not Found",status:404}
+    }
+    // Generate OTP
+    let otp = otpGenerator.generate(6, { upperCase: false, specialChars: false, alphabets: false })
+    if (!otp || (otp && otp.error)) {
+        return{error:"otp has been not created, please try again",status:500}
+    }
+    // Hash OTP
+    let hashOtp = await bcrypt.hash(otp,10).catch((error)=>{return{error}})
+    if (!hashOtp || (hashOtp && hashOtp.error)) {
+        return {error:"internal server error",status:500};
+    }
+
+    // Save it in DB
+    let update = await User.update({otp:hashOtp},{where:{id:user.id}}).catch((error)=>{return{error}})
+    // console.log("update",update);
+    if (!update || (update && update.error)) {
+        return{error:"user not login, please try again",status:500}
+    }
+    // Send email to user
+    let mailSend = await sendMail().catch((error)=>{return{error}})
+    if (!mailSend || (mailSend && mailSend.error)) {
+        return{error:"internal server error from mail",status:500}
+    }
+    // return response
+    return{hashOtp};
+}
+async function validateForgetPassword(params) {
+    let schema = joi.object({
+        email:joi.string().max(255).email().required(),
+    })
+    let valid = await schema.validateAsync(params,{abortEarly:false}).catch((error)=>{return{error}})
+    if (!valid || (valid && valid.error)) {
+        let msg = [];
+        for (const i of valid.error.details) {
+            msg.push(i.message)
+        }
+        return{error:msg}
+    }
+    return{data:valid}
+}
 async function logout(params) {
     
 }
 
-module.exports = {register,validateRegister,login,logout};
+module.exports = {register,validateRegister,login,forgetPassword,logout};
